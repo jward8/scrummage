@@ -5,9 +5,6 @@ from django.db import models
 class User(AbstractUser):
     """Custom user model — extend here as the project grows."""
 
-    class Meta:
-        db_table = "auth_user"
-
 
 class Drill(models.Model):
     SKILL_LEVEL_CHOICES = [
