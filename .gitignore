@@ -8,10 +8,6 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Migrations (keep __init__.py)
-**/migrations/*.py
-!**/migrations/__init__.py
-
 # Virtual environment
 venv/
 .venv/
