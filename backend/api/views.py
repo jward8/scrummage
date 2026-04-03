@@ -1,3 +1,6 @@
+import logging
+import os
+
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
@@ -9,11 +12,20 @@ from rest_framework.response import Response
 from .models import Drill, PracticePlan
 from .serializers import DrillSerializer, PracticePlanSerializer
 
+logger = logging.getLogger(__name__)
+
+ALLOWED_CONTENT_TYPES = {"video/mp4", "image/jpeg", "image/png", "image/gif"}
+
 
 class DrillViewSet(viewsets.ModelViewSet):
-    queryset = Drill.objects.select_related("created_by").all()
     serializer_class = DrillSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return Drill.objects.select_related("created_by").all()
+        return Drill.objects.select_related("created_by").filter(created_by=user)
 
 
 class PracticePlanViewSet(viewsets.ModelViewSet):
@@ -49,7 +61,14 @@ def generate_presigned_url(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    object_key = f"uploads/{request.user.id}/{filename}"
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        return Response(
+            {"detail": "Unsupported content type."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    safe_filename = os.path.basename(filename)
+    object_key = f"uploads/{request.user.id}/{safe_filename}"
 
     try:
         s3_client = boto3.client(
@@ -68,8 +87,9 @@ def generate_presigned_url(request):
             ExpiresIn=300,  # 5 minutes
         )
     except ClientError as exc:
+        logger.error("S3 presigned URL generation failed: %s", exc)
         return Response(
-            {"detail": str(exc)},
+            {"detail": "Upload URL generation failed."},
             status=status.HTTP_502_BAD_GATEWAY,
         )
 
