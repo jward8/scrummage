@@ -3,7 +3,13 @@ from django.db import models
 
 
 class User(AbstractUser):
-    """Custom user model — extend here as the project grows."""
+    ROLE_CHOICES = [
+        ("coach", "Coach"),
+        ("player", "Player"),
+        ("admin", "Admin"),
+    ]
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="coach")
+    is_subscribed = models.BooleanField(default=False)
 
 
 class Drill(models.Model):
@@ -38,6 +44,7 @@ class PracticePlan(models.Model):
     coach = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="practice_plans"
     )
+    practice_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
