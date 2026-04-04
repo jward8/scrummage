@@ -4,15 +4,29 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
-from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import generics, viewsets, status
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Drill, PracticePlan
-from .serializers import DrillSerializer, PracticePlanSerializer
+from .models import Drill, PracticePlan, PracticePlanDrill
+from .serializers import DrillSerializer, PracticePlanSerializer, PracticePlanDrillSerializer, RegisterSerializer, UserSerializer
 
 logger = logging.getLogger(__name__)
+
+
+class RegisterView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+    permission_classes = [AllowAny]
+
+
+class MeView(generics.RetrieveAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
 
 ALLOWED_CONTENT_TYPES = {"video/mp4", "image/jpeg", "image/png", "image/gif"}
 
@@ -42,6 +56,52 @@ class PracticePlanViewSet(viewsets.ModelViewSet):
         return PracticePlan.objects.select_related("coach").prefetch_related(
             "plan_drills__drill__created_by"
         ).filter(coach=user)
+
+    def _get_plan_or_403(self, pk):
+        plan = self.get_object()
+        user = self.request.user
+        if not user.is_staff and plan.coach != user:
+            return None, Response({"detail": "Not found."}, status=status.HTTP_403_FORBIDDEN)
+        return plan, None
+
+    @action(detail=True, methods=["post"], url_path="drills")
+    def add_drill(self, request, pk=None):
+        plan = self.get_object()
+        user = request.user
+        if not user.is_staff and plan.coach != user:
+            return Response({"detail": "Not found."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = PracticePlanDrillSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(plan=plan)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["patch"], url_path=r"drills/(?P<drill_id>[^/.]+)")
+    def update_drill(self, request, pk=None, drill_id=None):
+        plan = self.get_object()
+        user = request.user
+        if not user.is_staff and plan.coach != user:
+            return Response({"detail": "Not found."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            entry = PracticePlanDrill.objects.get(plan=plan, id=drill_id)
+        except PracticePlanDrill.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = PracticePlanDrillSerializer(entry, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["delete"], url_path=r"drills/(?P<drill_id>[^/.]+)")
+    def remove_drill(self, request, pk=None, drill_id=None):
+        plan = self.get_object()
+        user = request.user
+        if not user.is_staff and plan.coach != user:
+            return Response({"detail": "Not found."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            entry = PracticePlanDrill.objects.get(plan=plan, id=drill_id)
+        except PracticePlanDrill.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        entry.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["POST"])
