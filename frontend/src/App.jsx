@@ -1,19 +1,25 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import NavBar from "./components/NavBar";
 import LoginPage from "./pages/LoginPage";
 import DrillLibraryPage from "./pages/DrillLibraryPage";
 import DrillDetailPage from "./pages/DrillDetailPage";
 import PracticePlanPage from "./pages/PracticePlanPage";
 
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem("access_token");
+  return token ? children : <Navigate to="/login" replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <NavBar />
       <Routes>
-        <Route path="/" element={<LoginPage />} />
-        <Route path="/drills" element={<DrillLibraryPage />} />
-        <Route path="/drills/:id" element={<DrillDetailPage />} />
-        <Route path="/plans" element={<PracticePlanPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<Navigate to="/drills" replace />} />
+        <Route path="/drills" element={<ProtectedRoute><DrillLibraryPage /></ProtectedRoute>} />
+        <Route path="/drills/:id" element={<ProtectedRoute><DrillDetailPage /></ProtectedRoute>} />
+        <Route path="/plans" element={<ProtectedRoute><PracticePlanPage /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );
